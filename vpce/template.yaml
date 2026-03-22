@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation Template for VPC Endpoints (PrivateLink) required by Systems Manager (SSM) on Private Subnets.'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: 'ID of the VPC where the Endpoints will be created.'
+
+  VpcCidrBlock:
+    Type: String
+    Description: 'CIDR block of the VPC (e.g., 10.0.0.0/24). Used to allow local HTTPS traffic towards the endpoints.'
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: 'List of Subnet IDs where the Endpoint network interfaces will be deployed. Provide the private subnets.'
+
+Resources:
+  # 1. Security Group for the Interface Endpoints
+  # Needs to allow inbound HTTPS (443) from the VPC so the SSM Agent on the instance can communicate.
+  EndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security Group for SSM VPC Endpoints. Allows HTTPS traffic from the VPC.'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCidrBlock
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EndpointSG'
+        - Key: createdby
+          Value: pangoro24
+        - Key: project
+          Value: aws-cb-privatelink
+
+  # 2. SSM Endpoint: Required for the Systems Manager service itself.
+  SSMEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+
+  # 3. SSMMessages Endpoint: Required specifically for Fleet Manager / Session Manager to create the data channel.
+  SSMMessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+
+  # 4. EC2Messages Endpoint: Required for communication between SSM and EC2 (e.g., VSS, Run Command).
+  EC2MessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+
+Outputs:
+  EndpointSecurityGroupId:
+    Description: 'Security Group ID used by the VPC Endpoints'
+    Value: !Ref EndpointSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-EndpointSG'

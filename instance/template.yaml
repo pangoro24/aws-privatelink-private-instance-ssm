@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation Template for a Windows EC2 Instance configured for Systems Manager (Fleet Manager) access.'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: 'ID of the VPC where the Security Group will be deployed.'
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: 'ID of the Private Subnet where the EC2 Instance will be launched.'
+
+  InstanceName:
+    Type: String
+    Default: 'PrivateWindowsInstance'
+    Description: 'Name tag for the EC2 instance.'
+
+  InstanceType:
+    Type: String
+    Default: 't3.micro'
+    Description: 'EC2 Instance Type (t3.micro applies for free tier depending on your account).'
+
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Default: 'ami-01a15dfc48279bf55'
+    Description: 'AMI ID for the Windows Server instance.'
+
+Resources:
+  # IAM Role with permissions to be managed by Systems Manager (SSM)
+  SSMInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: createdby
+          Value: pangoro24
+        - Key: project
+          Value: aws-cb-privatelink
+
+  SSMInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref SSMInstanceRole
+
+  # Security Group (Fleet Manager / SSM does NOT need inbound ports open)
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'SG for Fleet Manager. Note: Systems Manager does not require any inbound rules, only outbound HTTPS.'
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-FleetManagerSG'
+        - Key: createdby
+          Value: pangoro24
+        - Key: project
+          Value: aws-cb-privatelink
+
+  # The EC2 Instance
+  WindowsInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Ref InstanceName
+        - Key: createdby
+          Value: pangoro24
+        - Key: project
+          Value: aws-cb-privatelink
+
+Outputs:
+  InstanceId:
+    Description: 'EC2 Instance ID'
+    Value: !Ref WindowsInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceId'
+  
+  InstancePrivateIp:
+    Description: 'Private IP of the Instance'
+    Value: !GetAtt WindowsInstance.PrivateIp
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateIp'
+
+  InstanceSecurityGroupId:
+    Description: 'ID of the associated Security Group'
+    Value: !Ref InstanceSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'
