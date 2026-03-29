@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation Template to deploy an S3 Interface VPC Endpoint.'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: 'ID of the VPC where the S3 Interface Endpoint will be deployed.'
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: 'Comma-separated list of Private Subnet IDs where the Endpoint Network Interfaces will be placed.'
+
+  VpcCidrBlock:
+    Type: String
+    Description: 'CIDR block of the VPC to allow inbound HTTPS traffic to the endpoint.'
+
+Resources:
+  S3EndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security Group for S3 Interface Endpoint. Allows HTTPS traffic from the VPC.'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCidrBlock
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-S3EndpointSG'
+        - Key: createdby
+          Value: pangoro24
+        - Key: project
+          Value: aws-cb-privatelink
+
+  S3InterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcEndpointType: Interface
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds:
+        - !Ref S3EndpointSecurityGroup
+      Tags:
+        - Key: createdby
+          Value: pangoro24
+        - Key: project
+          Value: aws-cb-privatelink
+
+Outputs:
+  S3InterfaceEndpointId:
+    Description: 'ID of the S3 Interface VPC Endpoint'
+    Value: !Ref S3InterfaceEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-S3InterfaceEndpointId'

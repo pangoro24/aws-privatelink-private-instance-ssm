@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation Template for an S3 Bucket with versioning and strict public access blocks.'
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: 'shared-data'
+    Description: 'Base name of the S3 bucket. The AWS Account ID will be automatically appended to ensure uniqueness.'
+
+Resources:
+  PrivateBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${BucketName}-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: createdby
+          Value: pangoro24
+        - Key: project
+          Value: aws-cb-privatelink
+
+Outputs:
+  BucketName:
+    Description: 'Name of the created S3 bucket'
+    Value: !Ref PrivateBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+  BucketArn:
+    Description: 'ARN of the S3 Bucket'
+    Value: !GetAtt PrivateBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketArn'

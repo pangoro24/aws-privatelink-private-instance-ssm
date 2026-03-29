@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudFormation Template for a Windows EC2 Instance configured for Systems Manager (Fleet Manager) access.'
+Description: 'CloudFormation Template for an EC2 Instance configured for Systems Manager (Fleet Manager) access.'
 
 Parameters:
   VpcId:
@@ -10,9 +10,14 @@ Parameters:
     Type: AWS::EC2::Subnet::Id
     Description: 'ID of the Private Subnet where the EC2 Instance will be launched.'
 
+  BucketName:
+    Type: String
+    Description: 'Name of the S3 bucket the instance needs to read from.'
+    Default: 'shared-data'
+
   InstanceName:
     Type: String
-    Default: 'PrivateWindowsInstance'
+    Default: 'PrivateInstance'
     Description: 'Name tag for the EC2 instance.'
 
   InstanceType:
@@ -22,8 +27,11 @@ Parameters:
 
   AmiId:
     Type: AWS::EC2::Image::Id
-    Default: 'ami-01a15dfc48279bf55'
-    Description: 'AMI ID for the Windows Server instance.'
+    Default: 'ami-02dfbd4ff395f2a1b'
+    AllowedValues:
+      - 'ami-01a15dfc48279bf55'
+      - 'ami-02dfbd4ff395f2a1b'
+    Description: 'AMI ID for the instance. ami-01a15dfc48279bf55 is Windows base, ami-02dfbd4ff395f2a1b is Linux.'
 
 Resources:
   # IAM Role with permissions to be managed by Systems Manager (SSM)
@@ -39,6 +47,18 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: S3BucketReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${BucketName}-${AWS::AccountId}"
+                  - !Sub "arn:aws:s3:::${BucketName}-${AWS::AccountId}/*"
       Tags:
         - Key: createdby
           Value: pangoro24
@@ -66,7 +86,7 @@ Resources:
           Value: aws-cb-privatelink
 
   # The EC2 Instance
-  WindowsInstance:
+  PrivateInstance:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref AmiId
@@ -86,13 +106,13 @@ Resources:
 Outputs:
   InstanceId:
     Description: 'EC2 Instance ID'
-    Value: !Ref WindowsInstance
+    Value: !Ref PrivateInstance
     Export:
       Name: !Sub '${AWS::StackName}-InstanceId'
   
   InstancePrivateIp:
     Description: 'Private IP of the Instance'
-    Value: !GetAtt WindowsInstance.PrivateIp
+    Value: !GetAtt PrivateInstance.PrivateIp
     Export:
       Name: !Sub '${AWS::StackName}-PrivateIp'
 
